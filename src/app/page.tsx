@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -328,14 +327,14 @@ export default function Home() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">Registered Agents</h2>
           <Dialog open={showRegister} onOpenChange={setShowRegister}>
-            <DialogTrigger
-              render={
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
-                  Register New Agent
-                </Button>
-              }
-            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRegister(true)}
+            >
+              <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+              Register New Agent
+            </Button>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Register New Agent</DialogTitle>
