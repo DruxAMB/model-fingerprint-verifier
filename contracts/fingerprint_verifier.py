@@ -11,9 +11,9 @@ class Agent:
     address: Address
     claimed_model: str
     description: str
-    status: str
-    responses: DynArray[str]
-    verification_result: str
+    status: str  # "pending", "verified", "flagged", "inconclusive"
+    responses_json: str  # JSON-encoded list of response strings
+    verification_result: str  # JSON string with verdict, confidence, reasoning
     registered_at: u256
     verified_at: u256
 
@@ -59,7 +59,7 @@ class FingerprintVerifier(gl.Contract):
             claimed_model=claimed_model,
             description=description,
             status="pending",
-            responses=DynArray[str](),
+            responses_json="[]",
             verification_result="",
             registered_at=u256(0),
             verified_at=u256(0),
@@ -84,8 +84,7 @@ class FingerprintVerifier(gl.Contract):
                 f"[EXPECTED] Expected {len(CHALLENGES)} responses, got {len(responses) if responses else 0}"
             )
 
-        for r in responses:
-            agent.responses.append(r)
+        agent.responses_json = json.dumps(responses)
 
     @gl.public.write
     def run_verification(self) -> None:
@@ -99,11 +98,12 @@ class FingerprintVerifier(gl.Contract):
         if agent.status != "pending":
             raise Exception("[EXPECTED] Agent already verified or flagged")
 
-        if not agent.responses:
+        responses = json.loads(agent.responses_json)
+        if not responses:
             raise Exception("[EXPECTED] No responses submitted")
 
         def leader_fn():
-            prompt = self._make_analysis_prompt(agent.claimed_model, agent.responses)
+            prompt = self._make_analysis_prompt(agent.claimed_model, responses)
             result = gl.nondet.exec_prompt(prompt, response_format="json")
             return result
 
@@ -142,7 +142,7 @@ class FingerprintVerifier(gl.Contract):
         )
         agent.verified_at = u256(0)
 
-    def _make_analysis_prompt(self, claimed_model: str, responses: DynArray[str]) -> str:
+    def _make_analysis_prompt(self, claimed_model: str, responses: list) -> str:
         challenge_text = ""
         for i, c in enumerate(CHALLENGES):
             response = responses[i] if i < len(responses) else "[no response]"
@@ -178,7 +178,7 @@ Respond as JSON:
             "claimed_model": agent.claimed_model,
             "description": agent.description,
             "status": agent.status,
-            "responses": [r for r in agent.responses],
+            "responses": json.loads(agent.responses_json) if agent.responses_json else [],
             "verification_result": agent.verification_result,
             "registered_at": int(agent.registered_at),
             "verified_at": int(agent.verified_at),
@@ -193,7 +193,7 @@ Respond as JSON:
                 "claimed_model": v.claimed_model,
                 "description": v.description,
                 "status": v.status,
-                "responses": [r for r in v.responses],
+                "responses": json.loads(v.responses_json) if v.responses_json else [],
                 "verification_result": v.verification_result,
                 "registered_at": int(v.registered_at),
                 "verified_at": int(v.verified_at),

@@ -1,34 +1,18 @@
-// GenLayer client integration for the Model Fingerprint Verifier contract.
-// Uses genlayer-js SDK to read from and write to the deployed contract.
+// GenLayer client integration — CLIENT-SAFE reads only.
+// Write operations are handled via server-side API routes to keep the
+// private key out of the browser bundle. See src/lib/genlayer-server.ts
+// and src/app/api/*/route.ts.
 
-import { createClient, createAccount } from "genlayer-js";
+import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
-import { TransactionStatus, ExecutionResult } from "genlayer-js/types";
 
-// Contract address on Studionet (deployed 2026-09-09)
-export const CONTRACT_ADDRESS = "0x3cdB5193E6A9Fedd4acB9007d5ba079b4dcECFBb";
+// Contract address on Studionet (deployed 2026-09-10)
+export const CONTRACT_ADDRESS = "0xCF6B87C16fE73F2087B07b6B0aF06BCB4B16e344";
 
-// Deployer account — used for write transactions in the demo.
-// On Studionet (gasless), no funds are needed.
-// In production, this would use a browser wallet (MetaMask) instead.
-const DEMO_PRIVATE_KEY = process.env.NEXT_PUBLIC_DEMO_PRIVATE_KEY || "";
-
-// Read client — no wallet needed
+// Read client — no wallet needed, safe for browser
 const readClient = createClient({
   chain: studionet,
 });
-
-// Write client — uses the deployer account for demo transactions
-function getWriteClient() {
-  if (!DEMO_PRIVATE_KEY) {
-    throw new Error("NEXT_PUBLIC_DEMO_PRIVATE_KEY not set");
-  }
-  const account = createAccount(DEMO_PRIVATE_KEY as `0x${string}`);
-  return createClient({
-    chain: studionet,
-    account,
-  });
-}
 
 export type AgentStatus = "pending" | "verified" | "flagged" | "inconclusive";
 
@@ -55,133 +39,76 @@ export type Challenge = {
   prompt: string;
 };
 
+// Parse the verification_result JSON string into an object
+function parseVerificationResult(raw: string): VerificationResult | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// Normalize the raw contract return into our Agent type
+function normalizeAgent(raw: Record<string, unknown>): Agent {
+  return {
+    address: String(raw.address ?? ""),
+    claimed_model: String(raw.claimed_model ?? ""),
+    description: String(raw.description ?? ""),
+    status: (raw.status as AgentStatus) ?? "pending",
+    responses: Array.isArray(raw.responses) ? (raw.responses as string[]) : [],
+    verification_result: parseVerificationResult(
+      typeof raw.verification_result === "string"
+        ? (raw.verification_result as string)
+        : "",
+    ),
+    registered_at: Number(raw.registered_at ?? 0),
+    verified_at: Number(raw.verified_at ?? 0),
+  };
+}
+
 // Read contract state
 export async function getChallenges(): Promise<Challenge[]> {
-  try {
-    const result = await readClient.readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_challenges",
-      args: [],
-    });
-    return result as Challenge[];
-  } catch (error) {
-    console.error("Failed to fetch challenges:", error);
-    throw error;
-  }
+  const result = await readClient.readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_challenges",
+    args: [],
+  });
+  return result as Challenge[];
 }
 
 export async function getAllAgents(): Promise<Record<string, Agent>> {
-  try {
-    const result = await readClient.readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_all_agents",
-      args: [],
-    });
-    return result as Record<string, Agent>;
-  } catch (error) {
-    console.error("Failed to fetch agents:", error);
-    throw error;
+  const result = (await readClient.readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_all_agents",
+    args: [],
+  })) as Record<string, Record<string, unknown>>;
+
+  const agents: Record<string, Agent> = {};
+  for (const [key, raw] of Object.entries(result)) {
+    agents[key] = normalizeAgent(raw);
   }
+  return agents;
 }
 
 export async function getAgent(address: string): Promise<Agent | null> {
-  try {
-    const result = await readClient.readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_agent",
-      args: [address],
-    });
-    if (!result || Object.keys(result as object).length === 0) {
-      return null;
-    }
-    return result as Agent;
-  } catch (error) {
-    console.error("Failed to fetch agent:", error);
-    throw error;
+  const result = (await readClient.readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_agent",
+    args: [address],
+  })) as Record<string, unknown>;
+
+  if (!result || Object.keys(result).length === 0) {
+    return null;
   }
+  return normalizeAgent(result);
 }
 
 export async function getAgentCount(): Promise<number> {
-  try {
-    const result = await readClient.readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_agent_count",
-      args: [],
-    });
-    return Number(result);
-  } catch (error) {
-    console.error("Failed to fetch agent count:", error);
-    throw error;
-  }
-}
-
-// Write contract state (requires demo account)
-export async function registerAgent(
-  claimedModel: string,
-  description: string,
-): Promise<string> {
-  const writeClient = getWriteClient();
-  const txHash = (await writeClient.writeContract({
+  const result = await readClient.readContract({
     address: CONTRACT_ADDRESS,
-    functionName: "register_agent",
-    args: [claimedModel, description],
-    value: BigInt(0),
-  })) as string;
-
-  // Wait for the transaction to be accepted
-  const receipt = await readClient.waitForTransactionReceipt({
-    hash: txHash as never,
-    status: TransactionStatus.ACCEPTED,
-  });
-
-  if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-    throw new Error(`Registration failed: ${receipt.txExecutionResultName}`);
-  }
-
-  return txHash;
-}
-
-export async function submitResponses(responses: string[]): Promise<string> {
-  const writeClient = getWriteClient();
-  const txHash = (await writeClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "submit_responses",
-    args: [responses],
-    value: BigInt(0),
-  })) as string;
-
-  const receipt = await readClient.waitForTransactionReceipt({
-    hash: txHash as never,
-    status: TransactionStatus.ACCEPTED,
-  });
-
-  if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-    throw new Error(`Submit responses failed: ${receipt.txExecutionResultName}`);
-  }
-
-  return txHash;
-}
-
-export async function runVerification(): Promise<string> {
-  const writeClient = getWriteClient();
-  const txHash = (await writeClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "run_verification",
+    functionName: "get_agent_count",
     args: [],
-    value: BigInt(0),
-  })) as string;
-
-  // Verification takes longer because it runs LLM consensus
-  const receipt = await readClient.waitForTransactionReceipt({
-    hash: txHash as never,
-    status: TransactionStatus.ACCEPTED,
   });
-
-  if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-    throw new Error(`Verification failed: ${receipt.txExecutionResultName}`);
-  }
-
-  return txHash;
+  return Number(result);
 }
-
-export { readClient };

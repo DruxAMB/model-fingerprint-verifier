@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,16 +26,18 @@ import {
   Brain,
   CheckCircle2,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import {
   type Agent,
   type AgentStatus,
   type VerificationResult,
-  CHALLENGES,
-  SEED_AGENTS,
-  MOCK_RESPONSES,
-  MOCK_VERIFICATION_RESULT,
-} from "@/lib/mock-data";
+  type Challenge,
+  getChallenges,
+  getAllAgents,
+  CONTRACT_ADDRESS,
+} from "@/lib/genlayer-client";
+import { MOCK_RESPONSES } from "@/lib/mock-data";
 
 const STATUS_CONFIG: Record<
   AgentStatus,
@@ -61,7 +63,7 @@ function StatusBadge({ status }: { status: AgentStatus }) {
 function AgentCard({ agent, onClick }: { agent: Agent; onClick: () => void }) {
   return (
     <Card
-      className="cursor-pointer hover:border-primary/50 transition-colors @media(hover:hover){hover:border-primary/50}"
+      className="cursor-pointer hover:border-primary/50 transition-colors"
       onClick={onClick}
     >
       <CardHeader className="pb-3">
@@ -180,87 +182,156 @@ function VerdictDisplay({ result }: { result: VerificationResult }) {
 }
 
 export default function Home() {
-  const [agents, setAgents] = useState<Agent[]>(SEED_AGENTS);
+  const [agents, setAgents] = useState<Record<string, Agent>>({});
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [claimedModel, setClaimedModel] = useState("");
   const [description, setDescription] = useState("");
 
-  const handleRegister = (e: React.FormEvent) => {
+  const refreshAgents = useCallback(async () => {
+    try {
+      setError(null);
+      const allAgents = await getAllAgents();
+      setAgents(allAgents);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch agents";
+      setError(msg);
+    }
+  }, []);
+
+  // Fetch challenges and agents on mount
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const ch = await getChallenges();
+        setChallenges(ch);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to fetch challenges";
+        setError(msg);
+      }
+      await refreshAgents();
+      setLoading(false);
+    }
+    load();
+  }, [refreshAgents]);
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!claimedModel.trim() || !description.trim()) return;
 
     setRegistering(true);
-    // Simulate contract call delay
-    setTimeout(() => {
-      const newAgent: Agent = {
-        address: `0x${Math.random().toString(16).slice(2, 42)}`,
-        claimed_model: claimedModel.trim(),
-        description: description.trim(),
-        status: "pending",
-        responses: [],
-        verification_result: null,
-        registered_at: Math.floor(Date.now() / 1000),
-        verified_at: 0,
-      };
-      setAgents([...agents, newAgent]);
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          claimedModel: claimedModel.trim(),
+          description: description.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Registration failed");
+      }
+      toast.success("Agent registered on-chain", {
+        description: `Claiming to be "${claimedModel.trim()}" — tx: ${data.txHash.slice(0, 10)}...`,
+      });
       setClaimedModel("");
       setDescription("");
-      setRegistering(false);
       setShowRegister(false);
-      toast.success("Agent registered", {
-        description: `Claiming to be "${newAgent.claimed_model}"`,
-      });
-      // Auto-select the new agent
-      setSelectedAgent(newAgent);
-    }, 800);
+      await refreshAgents();
+      // Select the newly registered agent
+      const updated = await getAllAgents();
+      const agentList = Object.values(updated);
+      if (agentList.length > 0) {
+        setSelectedAgent(agentList[agentList.length - 1]);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Registration failed";
+      toast.error("Registration failed", { description: msg });
+    } finally {
+      setRegistering(false);
+    }
   };
 
-  const handleSubmitMockResponses = () => {
+  const handleSubmitMockResponses = async () => {
     if (!selectedAgent) return;
-    const updated = agents.map((a) =>
-      a.address === selectedAgent.address
-        ? { ...a, responses: MOCK_RESPONSES }
-        : a,
-    );
-    setAgents(updated);
-    setSelectedAgent({ ...selectedAgent, responses: MOCK_RESPONSES });
-    toast.success("Mock responses submitted", {
-      description: "Simulated Gemini 3.6 Flash responses loaded",
-    });
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/submit-responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responses: MOCK_RESPONSES }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Submit responses failed");
+      }
+      toast.success("Responses submitted on-chain", {
+        description: "Simulated Gemini 3.6 Flash responses loaded",
+      });
+      await refreshAgents();
+      // Update selected agent with fresh data
+      const updated = await getAllAgents();
+      const fresh = updated[selectedAgent.address];
+      if (fresh) setSelectedAgent(fresh);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Submit responses failed";
+      toast.error("Submit responses failed", { description: msg });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRunVerification = () => {
+  const handleRunVerification = async () => {
     if (!selectedAgent) return;
     setVerifying(true);
-    // Simulate GenLayer consensus delay
-    setTimeout(() => {
-      const result = MOCK_VERIFICATION_RESULT;
-      const updated = agents.map((a) =>
-        a.address === selectedAgent.address
-          ? {
-              ...a,
-              status: "flagged" as AgentStatus,
-              verification_result: result,
-              verified_at: Math.floor(Date.now() / 1000),
-            }
-          : a,
-      );
-      setAgents(updated);
-      setSelectedAgent({
-        ...selectedAgent,
-        status: "flagged",
-        verification_result: result,
-        verified_at: Math.floor(Date.now() / 1000),
+    try {
+      const res = await fetch("/api/run-verification", {
+        method: "POST",
       });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Verification failed");
+      }
+      await refreshAgents();
+      // Update selected agent with fresh data
+      const updated = await getAllAgents();
+      const fresh = updated[selectedAgent.address];
+      if (fresh) {
+        setSelectedAgent(fresh);
+        if (fresh.verification_result) {
+          if (fresh.verification_result.verdict === "mismatch") {
+            toast.error("MISMATCH DETECTED", {
+              description: `Agent claiming "${fresh.claimed_model}" is suspected to be "${fresh.verification_result.suspected_actual_model}"`,
+            });
+          } else if (fresh.verification_result.verdict === "match") {
+            toast.success("VERIFIED", {
+              description: `Agent confirmed as "${fresh.claimed_model}"`,
+            });
+          } else {
+            toast.warning("INCONCLUSIVE", {
+              description: fresh.verification_result.reasoning,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      toast.error("Verification failed", { description: msg });
+    } finally {
       setVerifying(false);
-      toast.error("MISMATCH DETECTED", {
-        description: `Agent claiming "${selectedAgent.claimed_model}" is suspected to be "${result.suspected_actual_model}"`,
-      });
-    }, 2500);
+    }
   };
+
+  const agentList = Object.values(agents);
 
   return (
     <div className="min-h-screen bg-background">
@@ -319,6 +390,18 @@ export default function Home() {
               </p>
             </div>
           </div>
+          <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-mono">Contract: {CONTRACT_ADDRESS.slice(0, 10)}...{CONTRACT_ADDRESS.slice(-8)}</span>
+            <a
+              href={`https://studio.genlayer.com/contracts/${CONTRACT_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+              View on Studionet
+            </a>
+          </div>
         </div>
       </section>
 
@@ -326,76 +409,107 @@ export default function Home() {
       <section id="agents" className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">Registered Agents</h2>
-          <Dialog open={showRegister} onOpenChange={setShowRegister}>
+          <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => setShowRegister(true)}
+              onClick={refreshAgents}
+              disabled={loading}
             >
-              <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
-              Register New Agent
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
+              <span className="sr-only">Refresh</span>
             </Button>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Register New Agent</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleRegister} className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label htmlFor="claimed-model">Claimed Model</Label>
-                  <Input
-                    id="claimed-model"
-                    placeholder="e.g., GPT-5, Claude 3.5 Sonnet, Gemini 3.6 Flash"
-                    value={claimedModel}
-                    onChange={(e) => setClaimedModel(e.target.value)}
-                    required
-                    maxLength={200}
-                    disabled={registering}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Agent Description</Label>
-                  <Input
-                    id="description"
-                    placeholder="e.g., High-reasoning agent for DeFi trading"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    required
-                    maxLength={500}
-                    disabled={registering}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={registering || !claimedModel.trim() || !description.trim()}
-                >
-                  {registering ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
-                      Registering...
-                    </>
-                  ) : (
-                    "Register Agent"
-                  )}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+            <Dialog open={showRegister} onOpenChange={setShowRegister}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRegister(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+                Register New Agent
+              </Button>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Register New Agent</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleRegister} className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="claimed-model">Claimed Model</Label>
+                    <Input
+                      id="claimed-model"
+                      placeholder="e.g., GPT-5, Claude 3.5 Sonnet, Gemini 3.6 Flash"
+                      value={claimedModel}
+                      onChange={(e) => setClaimedModel(e.target.value)}
+                      required
+                      maxLength={200}
+                      disabled={registering}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Agent Description</Label>
+                    <Input
+                      id="description"
+                      placeholder="e.g., High-reasoning agent for DeFi trading"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      required
+                      maxLength={500}
+                      disabled={registering}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={registering || !claimedModel.trim() || !description.trim()}
+                  >
+                    {registering ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
+                        Registering on-chain...
+                      </>
+                    ) : (
+                      "Register Agent"
+                    )}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        {agents.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-8 text-center">
+            <AlertTriangle
+              className="h-8 w-8 mx-auto text-red-500 mb-2"
+              aria-hidden="true"
+            />
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+              Failed to load contract data
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 mb-4">{error}</p>
+            <Button variant="outline" size="sm" onClick={refreshAgents}>
+              <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" />
+              Retry
+            </Button>
+          </div>
+        ) : agentList.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center">
             <Fingerprint
               className="h-8 w-8 mx-auto text-muted-foreground mb-2"
               aria-hidden="true"
             />
             <p className="text-sm text-muted-foreground">
-              No agents registered yet. Click "Register New Agent" to get started.
+              No agents registered yet. Click &ldquo;Register New Agent&rdquo; to get started.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {agents.map((agent) => (
+            {agentList.map((agent) => (
               <AgentCard
                 key={agent.address}
                 agent={agent}
@@ -441,27 +555,39 @@ export default function Home() {
                     <Brain className="h-4 w-4" aria-hidden="true" />
                     Fingerprinting Challenges
                   </h3>
-                  {CHALLENGES.map((challenge, i) => (
-                    <ChallengeResponse
-                      key={challenge.id}
-                      challenge={challenge}
-                      response={selectedAgent.responses[i]}
-                      index={i}
-                    />
-                  ))}
+                  {challenges.length === 0 ? (
+                    <Skeleton className="h-20 w-full" />
+                  ) : (
+                    challenges.map((challenge, i) => (
+                      <ChallengeResponse
+                        key={challenge.id}
+                        challenge={challenge}
+                        response={selectedAgent.responses[i]}
+                        index={i}
+                      />
+                    ))
+                  )}
                 </div>
 
                 <Separator />
 
                 {/* Actions */}
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {selectedAgent.responses.length === 0 && (
+                  {selectedAgent.responses.length === 0 && selectedAgent.status === "pending" && (
                     <Button
                       onClick={handleSubmitMockResponses}
+                      disabled={submitting}
                       variant="secondary"
                       className="flex-1"
                     >
-                      Submit Mock Responses
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
+                          Submitting...
+                        </>
+                      ) : (
+                        "Submit Mock Responses"
+                      )}
                     </Button>
                   )}
                   {selectedAgent.responses.length > 0 &&
@@ -499,13 +625,13 @@ export default function Home() {
                 {/* Explorer Link */}
                 {!verifying && selectedAgent.verification_result && (
                   <a
-                    href={`https://explorer-bradbury.genlayer.com/address/${selectedAgent.address}`}
+                    href={`https://studio.genlayer.com/contracts/${CONTRACT_ADDRESS}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                    View on GenLayer Explorer
+                    View on GenLayer Studionet
                   </a>
                 )}
               </div>
