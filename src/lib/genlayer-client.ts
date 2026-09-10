@@ -6,7 +6,7 @@ import { studionet } from "genlayer-js/chains";
 import { TransactionStatus, ExecutionResult } from "genlayer-js/types";
 
 // Contract address on Studionet (deployed 2026-09-09)
-export const CONTRACT_ADDRESS = "0x6F946042DFf52c1B1f3535F205758Ec0edc1Ac9c";
+export const CONTRACT_ADDRESS = "0x3cdB5193E6A9Fedd4acB9007d5ba079b4dcECFBb";
 
 // Deployer account — used for write transactions in the demo.
 // On Studionet (gasless), no funds are needed.

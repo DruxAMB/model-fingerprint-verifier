@@ -1,21 +1,21 @@
-# { "Depends": "py-genlayer:test" }
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
-import json
-from dataclasses import dataclass
 from genlayer import *
+from dataclasses import dataclass
+import json
 
 
 @allow_storage
 @dataclass
 class Agent:
-    address: str
+    address: Address
     claimed_model: str
     description: str
-    status: str  # "pending", "verified", "flagged", "inconclusive"
-    responses: list  # list of response strings, one per challenge
-    verification_result: str  # JSON string with verdict, confidence, reasoning
-    registered_at: int
-    verified_at: int
+    status: str
+    responses: DynArray[str]
+    verification_result: str
+    registered_at: u256
+    verified_at: u256
 
 
 CHALLENGES = [
@@ -39,42 +39,10 @@ class FingerprintVerifier(gl.Contract):
     agent_count: u256
 
     def __init__(self):
-        self.agent_count = 0
-
-    def _get_challenges(self) -> list:
-        """Return the pre-defined challenge prompts."""
-        return [{"id": c["id"], "prompt": c["prompt"]} for c in CHALLENGES]
-
-    def _make_analysis_prompt(self, claimed_model: str, responses: list) -> str:
-        """Build the prompt for the validator LLM to analyze responses."""
-        challenges = self._get_challenges()
-        challenge_text = ""
-        for i, c in enumerate(challenges):
-            response = responses[i] if i < len(responses) else "[no response]"
-            challenge_text += f"\n\nChallenge {i+1} ({c['id']}):\nPrompt: {c['prompt']}\nResponse: {response}"
-
-        return f"""You are a model fingerprint analyst. An agent claims to be "{claimed_model}".
-
-The agent was given {len(challenges)} challenge prompts and responded to each.{challenge_text}
-
-Analyze these responses collectively and determine whether they are consistent with the claimed model "{claimed_model}".
-
-Consider:
-1. Does the self-identification (if any) match {claimed_model}?
-2. Does the response style match what {claimed_model} would produce?
-3. Are there any tells that suggest a different model?
-
-Respond as JSON:
-{{
-    "verdict": "match" | "mismatch" | "inconclusive",
-    "confidence": 0-100,
-    "reasoning": "one sentence explanation",
-    "suspected_actual_model": "your best guess or 'unknown'"
-}}"""
+        self.agent_count = u256(0)
 
     @gl.public.write
     def register_agent(self, claimed_model: str, description: str) -> None:
-        """Register a new agent with a model claim."""
         sender = gl.message.sender_address
 
         if sender in self.agents:
@@ -87,21 +55,20 @@ Respond as JSON:
             raise Exception("[EXPECTED] description must be 1-500 characters")
 
         agent = Agent(
-            address=sender.as_hex,
+            address=sender,
             claimed_model=claimed_model,
             description=description,
             status="pending",
-            responses=[],
+            responses=DynArray[str](),
             verification_result="",
-            registered_at=0,
-            verified_at=0,
+            registered_at=u256(0),
+            verified_at=u256(0),
         )
         self.agents[sender] = agent
-        self.agent_count += 1
+        self.agent_count += u256(1)
 
     @gl.public.write
     def submit_responses(self, responses: list) -> None:
-        """Submit responses to the challenge prompts."""
         sender = gl.message.sender_address
 
         if sender not in self.agents:
@@ -117,11 +84,11 @@ Respond as JSON:
                 f"[EXPECTED] Expected {len(CHALLENGES)} responses, got {len(responses) if responses else 0}"
             )
 
-        agent.responses = responses
+        for r in responses:
+            agent.responses.append(r)
 
     @gl.public.write
     def run_verification(self) -> None:
-        """Run GenLayer consensus to verify the agent's model identity."""
         sender = gl.message.sender_address
 
         if sender not in self.agents:
@@ -138,26 +105,26 @@ Respond as JSON:
         def leader_fn():
             prompt = self._make_analysis_prompt(agent.claimed_model, agent.responses)
             result = gl.nondet.exec_prompt(prompt, response_format="json")
-            # Normalize to stable JSON string
-            parsed = json.loads(result)
-            return json.dumps(parsed, sort_keys=True)
+            return result
 
-        # Use prompt_comparative for semantic equivalence
-        # Validators agree if they reach the same verdict
-        equivalence_rule = "Equal if same verdict and confidence within 1500 bps."
+        principle = "Equal if same verdict and confidence within 1500 bps."
 
         try:
-            result_str = gl.eq_principle.prompt_comparative(leader_fn, equivalence_rule)
-            result = json.loads(result_str)
+            result = gl.eq_principle.prompt_comparative(leader_fn, principle)
+            if isinstance(result, dict):
+                verdict = result.get("verdict", "inconclusive")
+                confidence = result.get("confidence", 0)
+                reasoning = result.get("reasoning", "")
+                suspected = result.get("suspected_actual_model", "unknown")
+            else:
+                parsed = json.loads(result)
+                verdict = parsed.get("verdict", "inconclusive")
+                confidence = parsed.get("confidence", 0)
+                reasoning = parsed.get("reasoning", "")
+                suspected = parsed.get("suspected_actual_model", "unknown")
         except Exception as e:
             raise Exception(f"[EXTERNAL] Verification failed: {e}")
 
-        verdict = result.get("verdict", "inconclusive")
-        confidence = result.get("confidence", 0)
-        reasoning = result.get("reasoning", "")
-        suspected = result.get("suspected_actual_model", "unknown")
-
-        # Update agent status based on verdict
         if verdict == "match":
             agent.status = "verified"
         elif verdict == "mismatch":
@@ -173,37 +140,70 @@ Respond as JSON:
                 "suspected_actual_model": suspected,
             }
         )
-        agent.verified_at = 0
+        agent.verified_at = u256(0)
+
+    def _make_analysis_prompt(self, claimed_model: str, responses: DynArray[str]) -> str:
+        challenge_text = ""
+        for i, c in enumerate(CHALLENGES):
+            response = responses[i] if i < len(responses) else "[no response]"
+            challenge_text += f"\n\nChallenge {i+1} ({c['id']}):\nPrompt: {c['prompt']}\nResponse: {response}"
+
+        return f"""You are a model fingerprint analyst. An agent claims to be "{claimed_model}".
+
+The agent was given {len(CHALLENGES)} challenge prompts and responded to each.{challenge_text}
+
+Analyze these responses collectively and determine whether they are consistent with the claimed model "{claimed_model}".
+
+Consider:
+1. Does the self-identification (if any) match {claimed_model}?
+2. Does the response style match what {claimed_model} would produce?
+3. Are there any tells that suggest a different model?
+
+Respond as JSON:
+{{
+    "verdict": "match" | "mismatch" | "inconclusive",
+    "confidence": 0-100,
+    "reasoning": "one sentence explanation",
+    "suspected_actual_model": "your best guess or 'unknown'"
+}}"""
 
     @gl.public.view
     def get_agent(self, address: str) -> dict:
-        """Get agent details by address."""
         addr = Address(address)
         if addr not in self.agents:
             return {}
         agent = self.agents[addr]
         return {
-            "address": agent.address,
+            "address": agent.address.as_hex,
             "claimed_model": agent.claimed_model,
             "description": agent.description,
             "status": agent.status,
-            "responses": agent.responses,
+            "responses": [r for r in agent.responses],
             "verification_result": agent.verification_result,
-            "registered_at": agent.registered_at,
-            "verified_at": agent.verified_at,
+            "registered_at": int(agent.registered_at),
+            "verified_at": int(agent.verified_at),
         }
 
     @gl.public.view
     def get_all_agents(self) -> dict:
-        """Get all registered agents."""
-        return {k.as_hex: v for k, v in self.agents.items()}
+        result = {}
+        for k, v in self.agents.items():
+            result[k.as_hex] = {
+                "address": v.address.as_hex,
+                "claimed_model": v.claimed_model,
+                "description": v.description,
+                "status": v.status,
+                "responses": [r for r in v.responses],
+                "verification_result": v.verification_result,
+                "registered_at": int(v.registered_at),
+                "verified_at": int(v.verified_at),
+            }
+        return result
 
     @gl.public.view
     def get_challenges(self) -> list:
-        """Return the challenge prompts."""
-        return self._get_challenges()
+        return [{"id": c["id"], "prompt": c["prompt"]} for c in CHALLENGES]
 
     @gl.public.view
     def get_agent_count(self) -> int:
-        """Return the total number of registered agents."""
-        return self.agent_count
+        return int(self.agent_count)
