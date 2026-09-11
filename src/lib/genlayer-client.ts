@@ -1,10 +1,10 @@
-// GenLayer client integration — CLIENT-SAFE reads only.
-// Write operations are handled via server-side API routes to keep the
-// private key out of the browser bundle. See src/lib/genlayer-server.ts
-// and src/app/api/*/route.ts.
+// GenLayer client integration — reads are always available, writes
+// require a connected MetaMask wallet. No private keys are stored or
+// transmitted; the user signs all transactions through their wallet.
 
 import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
+import { TransactionStatus, ExecutionResult } from "genlayer-js/types";
 
 // Contract address on Studionet (deployed 2026-09-10)
 export const CONTRACT_ADDRESS = "0xCF6B87C16fE73F2087B07b6B0aF06BCB4B16e344";
@@ -67,7 +67,8 @@ function normalizeAgent(raw: Record<string, unknown>): Agent {
   };
 }
 
-// Read contract state
+// --- Reads (no wallet needed) ---
+
 export async function getChallenges(): Promise<Challenge[]> {
   const result = await readClient.readContract({
     address: CONTRACT_ADDRESS,
@@ -111,4 +112,137 @@ export async function getAgentCount(): Promise<number> {
     args: [],
   });
   return Number(result);
+}
+
+// --- Writes (require connected MetaMask wallet) ---
+
+// Create a write client using the user's wallet. The wallet must be
+// switched to Studionet before writing — call switchToStudionet first.
+function getWriteClient(address: string) {
+  if (typeof window === "undefined" || !window.ethereum) {
+    throw new Error("No wallet found. Install MetaMask to continue.");
+  }
+  return createClient({
+    chain: studionet,
+    account: address as `0x${string}`,
+    provider: window.ethereum,
+  });
+}
+
+// Switch the user's MetaMask to the Studionet network.
+// This adds the network if it's not already present.
+export async function switchToStudionet(): Promise<void> {
+  if (typeof window === "undefined" || !window.ethereum) {
+    throw new Error("No wallet found. Install MetaMask to continue.");
+  }
+
+  try {
+    // Try switching first
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0xF22F" }], // 61999 in hex
+    });
+  } catch (switchError: unknown) {
+    // If the chain hasn't been added, add it
+    const err = switchError as { code?: number };
+    if (err.code === 4902) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: "0xF22F",
+            chainName: "GenLayer Studionet",
+            nativeCurrency: {
+              name: "GEN",
+              symbol: "GEN",
+              decimals: 18,
+            },
+            rpcUrls: ["https://studio.genlayer.com/api"],
+            blockExplorerUrls: ["https://studio.genlayer.com"],
+          },
+        ],
+      });
+    } else {
+      throw switchError;
+    }
+  }
+}
+
+// Check receipt for errors. txExecutionResultName may be undefined for
+// write transactions that don't return a value — that's OK. We only
+// fail on explicit FINISHED_WITH_ERROR.
+function checkReceipt(
+  receipt: { txExecutionResultName?: ExecutionResult },
+  label: string,
+): void {
+  if (receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_ERROR) {
+    throw new Error(`${label} failed: ${receipt.txExecutionResultName}`);
+  }
+}
+
+export async function registerAgent(
+  address: string,
+  claimedModel: string,
+  description: string,
+): Promise<{ txHash: string }> {
+  await switchToStudionet();
+  const writeClient = getWriteClient(address);
+  const txHash = (await writeClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "register_agent",
+    args: [claimedModel, description],
+    value: BigInt(0),
+  })) as string;
+
+  const receipt = await readClient.waitForTransactionReceipt({
+    hash: txHash as never,
+    status: TransactionStatus.ACCEPTED,
+  });
+
+  checkReceipt(receipt, "Registration");
+  return { txHash };
+}
+
+export async function submitResponses(
+  address: string,
+  responses: string[],
+): Promise<{ txHash: string }> {
+  await switchToStudionet();
+  const writeClient = getWriteClient(address);
+  const txHash = (await writeClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "submit_responses",
+    args: [responses],
+    value: BigInt(0),
+  })) as string;
+
+  const receipt = await readClient.waitForTransactionReceipt({
+    hash: txHash as never,
+    status: TransactionStatus.ACCEPTED,
+  });
+
+  checkReceipt(receipt, "Submit responses");
+  return { txHash };
+}
+
+export async function runVerification(
+  address: string,
+): Promise<{ txHash: string }> {
+  await switchToStudionet();
+  const writeClient = getWriteClient(address);
+  const txHash = (await writeClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "run_verification",
+    args: [],
+    value: BigInt(0),
+  })) as string;
+
+  // Verification takes longer because it runs LLM consensus
+  const receipt = await readClient.waitForTransactionReceipt({
+    hash: txHash as never,
+    status: TransactionStatus.ACCEPTED,
+  });
+
+  checkReceipt(receipt, "Verification");
+  return { txHash };
 }

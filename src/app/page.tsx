@@ -27,6 +27,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
+  Wallet,
+  LogOut,
 } from "lucide-react";
 import {
   type Agent,
@@ -35,8 +37,12 @@ import {
   type Challenge,
   getChallenges,
   getAllAgents,
+  registerAgent,
+  submitResponses,
+  runVerification,
   CONTRACT_ADDRESS,
 } from "@/lib/genlayer-client";
+import { useWallet } from "@/lib/use-wallet";
 import { MOCK_RESPONSES } from "@/lib/mock-data";
 
 const STATUS_CONFIG: Record<
@@ -182,6 +188,7 @@ function VerdictDisplay({ result }: { result: VerificationResult }) {
 }
 
 export default function Home() {
+  const wallet = useWallet();
   const [agents, setAgents] = useState<Record<string, Agent>>({});
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -224,24 +231,23 @@ export default function Home() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!wallet.address) {
+      toast.error("Wallet not connected", {
+        description: "Connect your MetaMask wallet to register an agent.",
+      });
+      return;
+    }
     if (!claimedModel.trim() || !description.trim()) return;
 
     setRegistering(true);
     try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          claimedModel: claimedModel.trim(),
-          description: description.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
+      const result = await registerAgent(
+        wallet.address,
+        claimedModel.trim(),
+        description.trim(),
+      );
       toast.success("Agent registered on-chain", {
-        description: `Claiming to be "${claimedModel.trim()}" — tx: ${data.txHash.slice(0, 10)}...`,
+        description: `Claiming to be "${claimedModel.trim()}" — tx: ${result.txHash.slice(0, 10)}...`,
       });
       setClaimedModel("");
       setDescription("");
@@ -249,10 +255,8 @@ export default function Home() {
       await refreshAgents();
       // Select the newly registered agent
       const updated = await getAllAgents();
-      const agentList = Object.values(updated);
-      if (agentList.length > 0) {
-        setSelectedAgent(agentList[agentList.length - 1]);
-      }
+      const fresh = updated[wallet.address];
+      if (fresh) setSelectedAgent(fresh);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed";
       toast.error("Registration failed", { description: msg });
@@ -262,23 +266,14 @@ export default function Home() {
   };
 
   const handleSubmitMockResponses = async () => {
-    if (!selectedAgent) return;
+    if (!selectedAgent || !wallet.address) return;
     setSubmitting(true);
     try {
-      const res = await fetch("/api/submit-responses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responses: MOCK_RESPONSES }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Submit responses failed");
-      }
+      const result = await submitResponses(wallet.address, MOCK_RESPONSES);
       toast.success("Responses submitted on-chain", {
         description: "Simulated Gemini 3.6 Flash responses loaded",
       });
       await refreshAgents();
-      // Update selected agent with fresh data
       const updated = await getAllAgents();
       const fresh = updated[selectedAgent.address];
       if (fresh) setSelectedAgent(fresh);
@@ -291,18 +286,11 @@ export default function Home() {
   };
 
   const handleRunVerification = async () => {
-    if (!selectedAgent) return;
+    if (!selectedAgent || !wallet.address) return;
     setVerifying(true);
     try {
-      const res = await fetch("/api/run-verification", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Verification failed");
-      }
+      await runVerification(wallet.address);
       await refreshAgents();
-      // Update selected agent with fresh data
       const updated = await getAllAgents();
       const fresh = updated[selectedAgent.address];
       if (fresh) {
@@ -332,17 +320,55 @@ export default function Home() {
   };
 
   const agentList = Object.values(agents);
+  const connectedAgent = wallet.address ? agents[wallet.address] : null;
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
-          <div className="flex items-center gap-2 mb-4">
-            <Fingerprint className="h-6 w-6 text-primary" aria-hidden="true" />
-            <span className="text-sm font-medium text-muted-foreground">
-              GenLayer Intelligent Contract
-            </span>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Fingerprint className="h-6 w-6 text-primary" aria-hidden="true" />
+              <span className="text-sm font-medium text-muted-foreground">
+                GenLayer Intelligent Contract
+              </span>
+            </div>
+            {/* Wallet connection */}
+            {wallet.address ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs">
+                  <Wallet className="h-3 w-3 mr-1" aria-hidden="true" />
+                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={wallet.disconnect}
+                >
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Disconnect</span>
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={wallet.connect}
+                disabled={wallet.connecting || !wallet.hasWallet}
+              >
+                {wallet.connecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="h-4 w-4 mr-1" aria-hidden="true" />
+                    Connect Wallet
+                  </>
+                )}
+              </Button>
+            )}
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Model Fingerprint Verifier
@@ -351,6 +377,25 @@ export default function Home() {
             On-chain identity verification for AI agents. GenLayer consensus
             catches agents lying about what model they run.
           </p>
+          {wallet.error && (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {wallet.error}
+            </p>
+          )}
+          {!wallet.hasWallet && (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              No wallet detected. Install{" "}
+              <a
+                href="https://metamask.io/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                MetaMask
+              </a>{" "}
+              to register and verify agents.
+            </p>
+          )}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button
               size="lg"
@@ -361,14 +406,26 @@ export default function Home() {
             >
               Try the demo
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => setShowRegister(true)}
-            >
-              <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
-              Register New Agent
-            </Button>
+            {wallet.address ? (
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setShowRegister(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+                Register New Agent
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={wallet.connect}
+                disabled={wallet.connecting || !wallet.hasWallet}
+              >
+                <Wallet className="h-4 w-4 mr-1" aria-hidden="true" />
+                Connect to Register
+              </Button>
+            )}
           </div>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-lg border p-4">
@@ -423,7 +480,14 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowRegister(true)}
+                onClick={() => {
+                  if (!wallet.address) {
+                    wallet.connect();
+                  } else {
+                    setShowRegister(true);
+                  }
+                }}
+                disabled={!wallet.hasWallet}
               >
                 <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
                 Register New Agent
@@ -471,6 +535,10 @@ export default function Home() {
                       "Register Agent"
                     )}
                   </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    MetaMask will prompt you to sign the transaction.
+                    Studionet is gasless — no funds needed.
+                  </p>
                 </form>
               </DialogContent>
             </Dialog>
@@ -504,7 +572,10 @@ export default function Home() {
               aria-hidden="true"
             />
             <p className="text-sm text-muted-foreground">
-              No agents registered yet. Click &ldquo;Register New Agent&rdquo; to get started.
+              No agents registered yet.{" "}
+              {wallet.address
+                ? "Click \u201CRegister New Agent\u201D to get started."
+                : "Connect your wallet to register the first agent."}
             </p>
           </div>
         ) : (
@@ -545,6 +616,11 @@ export default function Home() {
                   <p className="text-xs font-mono text-muted-foreground">
                     {selectedAgent.address}
                   </p>
+                  {selectedAgent.address === wallet.address && (
+                    <Badge variant="outline" className="text-xs mt-1">
+                      Your agent
+                    </Badge>
+                  )}
                 </div>
 
                 <Separator />
@@ -571,46 +647,71 @@ export default function Home() {
 
                 <Separator />
 
-                {/* Actions */}
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {selectedAgent.responses.length === 0 && selectedAgent.status === "pending" && (
-                    <Button
-                      onClick={handleSubmitMockResponses}
-                      disabled={submitting}
-                      variant="secondary"
-                      className="flex-1"
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
-                          Submitting...
-                        </>
-                      ) : (
-                        "Submit Mock Responses"
-                      )}
-                    </Button>
-                  )}
-                  {selectedAgent.responses.length > 0 &&
-                    selectedAgent.status === "pending" && (
+                {/* Actions — only for the connected user's own agent */}
+                {selectedAgent.address === wallet.address ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {selectedAgent.responses.length === 0 && selectedAgent.status === "pending" && (
                       <Button
-                        onClick={handleRunVerification}
-                        disabled={verifying}
+                        onClick={handleSubmitMockResponses}
+                        disabled={submitting}
+                        variant="secondary"
                         className="flex-1"
                       >
-                        {verifying ? (
+                        {submitting ? (
                           <>
-                            <Loader2
-                              className="h-4 w-4 mr-1 animate-spin"
-                              aria-hidden="true"
-                            />
-                            GenLayer validators analyzing...
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />
+                            Submitting...
                           </>
                         ) : (
-                          "Run Verification"
+                          "Submit Mock Responses"
                         )}
                       </Button>
                     )}
-                </div>
+                    {selectedAgent.responses.length > 0 &&
+                      selectedAgent.status === "pending" && (
+                        <Button
+                          onClick={handleRunVerification}
+                          disabled={verifying}
+                          className="flex-1"
+                        >
+                          {verifying ? (
+                            <>
+                              <Loader2
+                                className="h-4 w-4 mr-1 animate-spin"
+                                aria-hidden="true"
+                              />
+                              GenLayer validators analyzing...
+                            </>
+                          ) : (
+                            "Run Verification"
+                          )}
+                        </Button>
+                      )}
+                  </div>
+                ) : !wallet.address ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Connect your wallet to register and verify your own agent.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={wallet.connect}
+                      disabled={wallet.connecting || !wallet.hasWallet}
+                    >
+                      <Wallet className="h-4 w-4 mr-1" aria-hidden="true" />
+                      Connect Wallet
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      This agent belongs to another wallet. Register your own
+                      agent to submit responses and run verification.
+                    </p>
+                  </div>
+                )}
 
                 {/* Verification Result */}
                 {verifying && (
