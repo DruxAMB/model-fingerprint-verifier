@@ -20,6 +20,7 @@ type WalletModalProps = {
   detectedWallets: DetectedWallet[];
   onSelect: (walletId: WalletId) => void;
   connecting: boolean;
+  connectingWallet: WalletId | null;
 };
 
 // Wallets to always show in the modal (even if not detected)
@@ -38,6 +39,7 @@ export function WalletModal({
   detectedWallets,
   onSelect,
   connecting,
+  connectingWallet,
 }: WalletModalProps) {
   const detectedIds = new Set(detectedWallets.map((w) => w.id));
 
@@ -72,7 +74,7 @@ export function WalletModal({
                     {isDetected ? "Detected" : "Not installed"}
                   </p>
                 </div>
-                {connecting && (
+                {connecting && connectingWallet === id && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
                 )}
               </button>
@@ -100,6 +102,9 @@ export function WalletModal({
                 Use the built-in browser wallet
               </p>
             </div>
+            {connecting && connectingWallet === "browser" && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+            )}
           </button>
 
           <p className="pt-2 text-center text-xs text-muted-foreground">

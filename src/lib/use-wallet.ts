@@ -99,6 +99,7 @@ export type WalletState = {
 export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState<WalletId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasWallet, setHasWallet] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -140,8 +141,9 @@ export function useWallet() {
   }, []);
 
   const connectWithProvider = useCallback(
-    async (provider: Eip1193Provider, walletName: string) => {
+    async (walletId: WalletId, provider: Eip1193Provider, walletName: string) => {
       setConnecting(true);
+      setConnectingWallet(walletId);
       setError(null);
       try {
         const accounts = (await provider.request({
@@ -156,6 +158,7 @@ export function useWallet() {
         setError(msg);
       } finally {
         setConnecting(false);
+        setConnectingWallet(null);
       }
     },
     [],
@@ -173,14 +176,14 @@ export function useWallet() {
         const wallets = detectWallets();
         const wallet = wallets.find((w) => w.id === walletId);
         if (wallet && wallet.provider) {
-          await connectWithProvider(wallet.provider, wallet.name);
+          await connectWithProvider(walletId, wallet.provider, wallet.name);
           return;
         }
       }
 
       // "Browser Wallet" fallback
       if (walletId === "browser") {
-        await connectWithProvider(window.ethereum, "Browser Wallet");
+        await connectWithProvider("browser", window.ethereum, "Browser Wallet");
         return;
       }
 
@@ -200,6 +203,7 @@ export function useWallet() {
   return {
     address,
     connecting,
+    connectingWallet,
     error,
     hasWallet,
     showWalletModal,

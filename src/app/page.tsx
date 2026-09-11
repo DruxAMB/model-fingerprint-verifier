@@ -749,6 +749,7 @@ export default function Home() {
         detectedWallets={wallet.detectedWallets}
         onSelect={(id) => wallet.connect(id)}
         connecting={wallet.connecting}
+        connectingWallet={wallet.connectingWallet}
       />
     </div>
   );
