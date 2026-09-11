@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +22,7 @@ type WalletModalProps = {
   connectingWallet: WalletId | null;
 };
 
-// Wallets to always show in the modal (even if not detected)
+// All wallets to show in the modal
 const ALL_WALLET_IDS: WalletId[] = [
   "metamask",
   "coinbase",
@@ -33,6 +32,16 @@ const ALL_WALLET_IDS: WalletId[] = [
   "phantom",
 ];
 
+// Download links for non-installed wallets
+const WALLET_DOWNLOAD_URLS: Record<string, string> = {
+  metamask: "https://metamask.io/download/",
+  coinbase: "https://www.coinbase.com/wallet/downloads",
+  rabby: "https://rabby.io/",
+  okx: "https://www.okx.com/web3",
+  trust: "https://trustwallet.com/download",
+  phantom: "https://phantom.com/download",
+};
+
 export function WalletModal({
   open,
   onOpenChange,
@@ -41,7 +50,14 @@ export function WalletModal({
   connecting,
   connectingWallet,
 }: WalletModalProps) {
-  const detectedIds = new Set(detectedWallets.map((w) => w.id));
+  const detectedMap = new Map(detectedWallets.map((w) => [w.id, w]));
+
+  // Sort: detected wallets first, then others
+  const sortedIds = [...ALL_WALLET_IDS].sort((a, b) => {
+    const aDetected = detectedMap.has(a) ? 0 : 1;
+    const bDetected = detectedMap.has(b) ? 0 : 1;
+    return aDetected - bDetected;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,27 +70,32 @@ export function WalletModal({
         </DialogHeader>
 
         <div className="space-y-2 pt-2">
-          {/* Detected wallets first */}
-          {ALL_WALLET_IDS.map((id) => {
+          {sortedIds.map((id) => {
             const meta = WALLET_META[id];
-            const isDetected = detectedIds.has(id);
+            const detected = detectedMap.get(id);
+            const isDetected = !!detected;
             const Logo = meta.Logo;
+            const isConnecting = connecting && connectingWallet === id;
 
             return (
               <button
                 key={id}
                 onClick={() => onSelect(id)}
-                disabled={connecting || !isDetected}
+                disabled={connecting}
                 className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Logo className="h-8 w-8 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{meta.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {isDetected ? "Detected" : "Not installed"}
+                    {isDetected
+                      ? "Detected"
+                      : isConnecting
+                        ? "Connecting..."
+                        : "Popular"}
                   </p>
                 </div>
-                {connecting && connectingWallet === id && (
+                {isConnecting && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
                 )}
               </button>

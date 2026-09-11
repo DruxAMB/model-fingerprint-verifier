@@ -21,6 +21,10 @@ type Eip1193Provider = {
 declare global {
   interface Window {
     ethereum?: Eip1193Provider;
+    phantom?: { ethereum?: Eip1193Provider };
+    coinbaseWalletExtension?: Eip1193Provider;
+    okxwallet?: Eip1193Provider;
+    trustwallet?: Eip1193Provider;
   }
 }
 
@@ -47,23 +51,53 @@ export const WALLET_META: Record<
   browser: { name: "Browser Wallet", Logo: MetaMask }, // fallback uses generic
 };
 
-// Detect all injected wallets available in the browser
+// Detect all injected wallets available in the browser.
+// Wallets inject themselves in different ways:
+// - MetaMask, Rabby: window.ethereum with isMetaMask/isRabby flag
+// - Coinbase: window.ethereum.providers[] with isCoinbaseWallet, or window.coinbaseWalletExtension
+// - Phantom: window.phantom.ethereum (separate injection point), or window.ethereum with isPhantom
+// - OKX: window.okxwallet, or window.ethereum.providers[] with isOkxWallet
+// - Trust: window.trustwallet, or window.ethereum.providers[] with isTrust
 function detectWallets(): DetectedWallet[] {
-  if (typeof window === "undefined" || !window.ethereum) {
-    return [];
-  }
-
-  const providers: Eip1193Provider[] = [];
-  // Some wallets inject multiple providers via window.ethereum.providers
-  if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
-    providers.push(...window.ethereum.providers);
-  } else {
-    providers.push(window.ethereum);
-  }
+  if (typeof window === "undefined") return [];
 
   const detected: Record<string, DetectedWallet> = {};
 
-  for (const provider of providers) {
+  // Gather all possible providers to check
+  const candidates: Eip1193Provider[] = [];
+
+  // 1. window.ethereum (may be a single provider or have a providers[] array)
+  if (window.ethereum) {
+    candidates.push(window.ethereum);
+    if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
+      candidates.push(...window.ethereum.providers);
+    }
+  }
+
+  // 2. Phantom injects at window.phantom.ethereum (separate from window.ethereum)
+  if (window.phantom?.ethereum) {
+    candidates.push(window.phantom.ethereum);
+  }
+
+  // 3. Coinbase may also inject at window.coinbaseWalletExtension
+  if (window.coinbaseWalletExtension) {
+    candidates.push(window.coinbaseWalletExtension);
+  }
+
+  // 4. OKX may inject at window.okxwallet
+  if (window.okxwallet) {
+    candidates.push(window.okxwallet);
+  }
+
+  // 5. Trust may inject at window.trustwallet
+  if (window.trustwallet) {
+    candidates.push(window.trustwallet);
+  }
+
+  // Check each candidate provider for wallet-specific flags
+  for (const provider of candidates) {
+    if (!provider) continue;
+
     if (provider.isMetaMask && !detected.metamask) {
       detected.metamask = { id: "metamask", name: "MetaMask", provider, installed: true };
     }
@@ -84,7 +118,89 @@ function detectWallets(): DetectedWallet[] {
     }
   }
 
+  // Special case: Phantom injects at window.phantom.ethereum but may not set
+  // isPhantom on the provider in all versions. If window.phantom exists, mark it.
+  if (!detected.phantom && window.phantom?.ethereum) {
+    detected.phantom = {
+      id: "phantom",
+      name: "Phantom",
+      provider: window.phantom.ethereum,
+      installed: true,
+    };
+  }
+
+  // Special case: Coinbase may inject at window.coinbaseWalletExtension
+  // without the isCoinbaseWallet flag
+  if (!detected.coinbase && window.coinbaseWalletExtension) {
+    detected.coinbase = {
+      id: "coinbase",
+      name: "Coinbase Wallet",
+      provider: window.coinbaseWalletExtension,
+      installed: true,
+    };
+  }
+
   return Object.values(detected);
+}
+
+// Try to get a specific wallet's provider by its known injection point.
+// Used as a fallback when detectWallets() doesn't find it.
+function getWalletProvider(walletId: WalletId): Eip1193Provider | null {
+  if (typeof window === "undefined") return null;
+
+  switch (walletId) {
+    case "metamask":
+      // MetaMask is usually window.ethereum with isMetaMask
+      if (window.ethereum?.isMetaMask) return window.ethereum;
+      if (window.ethereum?.providers) {
+        const mm = window.ethereum.providers.find((p) => p.isMetaMask);
+        if (mm) return mm;
+      }
+      return window.ethereum ?? null;
+
+    case "coinbase":
+      if (window.coinbaseWalletExtension) return window.coinbaseWalletExtension;
+      if (window.ethereum?.isCoinbaseWallet) return window.ethereum;
+      if (window.ethereum?.providers) {
+        const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
+        if (cb) return cb;
+      }
+      return null;
+
+    case "phantom":
+      if (window.phantom?.ethereum) return window.phantom.ethereum;
+      if (window.ethereum?.isPhantom) return window.ethereum;
+      return null;
+
+    case "rabby":
+      if (window.ethereum?.isRabby) return window.ethereum;
+      if (window.ethereum?.providers) {
+        const rb = window.ethereum.providers.find((p) => p.isRabby);
+        if (rb) return rb;
+      }
+      return null;
+
+    case "okx":
+      if (window.okxwallet) return window.okxwallet;
+      if (window.ethereum?.isOkxWallet) return window.ethereum;
+      if (window.ethereum?.providers) {
+        const ok = window.ethereum.providers.find((p) => p.isOkxWallet);
+        if (ok) return ok;
+      }
+      return null;
+
+    case "trust":
+      if (window.trustwallet) return window.trustwallet;
+      if (window.ethereum?.isTrust) return window.ethereum;
+      if (window.ethereum?.providers) {
+        const tw = window.ethereum.providers.find((p) => p.isTrust);
+        if (tw) return tw;
+      }
+      return null;
+
+    default:
+      return window.ethereum ?? null;
+  }
 }
 
 export type WalletState = {
@@ -166,8 +282,8 @@ export function useWallet() {
 
   const connect = useCallback(
     async (walletId?: WalletId) => {
-      if (typeof window === "undefined" || !window.ethereum) {
-        setError("No wallet found. Install MetaMask to continue.");
+      if (typeof window === "undefined") {
+        setError("No wallet found. This only works in a browser.");
         return;
       }
 
@@ -179,15 +295,30 @@ export function useWallet() {
           await connectWithProvider(walletId, wallet.provider, wallet.name);
           return;
         }
-      }
 
-      // "Browser Wallet" fallback
-      if (walletId === "browser") {
-        await connectWithProvider("browser", window.ethereum, "Browser Wallet");
+        // Wallet not detected — try its known injection point as a last resort
+        const fallbackProvider = getWalletProvider(walletId);
+        if (fallbackProvider) {
+          await connectWithProvider(walletId, fallbackProvider, WALLET_META[walletId].name);
+          return;
+        }
+
+        // No provider found for this wallet
+        setError(`${WALLET_META[walletId].name} not detected. Make sure the extension is installed and enabled.`);
         return;
       }
 
-      // No walletId specified — always show the modal
+      // "Browser Wallet" fallback — use whatever window.ethereum is
+      if (walletId === "browser") {
+        if (window.ethereum) {
+          await connectWithProvider("browser", window.ethereum, "Browser Wallet");
+        } else {
+          setError("No browser wallet found. Install MetaMask or another wallet extension.");
+        }
+        return;
+      }
+
+      // No walletId specified — show the modal
       const wallets = detectWallets();
       setDetectedWallets(wallets);
       setShowWalletModal(true);
