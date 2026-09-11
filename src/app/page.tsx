@@ -43,6 +43,7 @@ import {
   CONTRACT_ADDRESS,
 } from "@/lib/genlayer-client";
 import { useWallet } from "@/lib/use-wallet";
+import { WalletModal } from "@/components/wallet/wallet-modal";
 import { MOCK_RESPONSES } from "@/lib/mock-data";
 
 const STATUS_CONFIG: Record<
@@ -353,7 +354,7 @@ export default function Home() {
             ) : (
               <Button
                 size="sm"
-                onClick={wallet.connect}
+                onClick={() => wallet.connect()}
                 disabled={wallet.connecting || !wallet.hasWallet}
               >
                 {wallet.connecting ? (
@@ -419,7 +420,7 @@ export default function Home() {
               <Button
                 size="lg"
                 variant="outline"
-                onClick={wallet.connect}
+                onClick={() => wallet.connect()}
                 disabled={wallet.connecting || !wallet.hasWallet}
               >
                 <Wallet className="h-4 w-4 mr-1" aria-hidden="true" />
@@ -697,7 +698,7 @@ export default function Home() {
                       variant="outline"
                       size="sm"
                       className="mt-2"
-                      onClick={wallet.connect}
+                      onClick={() => wallet.connect()}
                       disabled={wallet.connecting || !wallet.hasWallet}
                     >
                       <Wallet className="h-4 w-4 mr-1" aria-hidden="true" />
@@ -740,6 +741,15 @@ export default function Home() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Wallet Selection Modal */}
+      <WalletModal
+        open={wallet.showWalletModal}
+        onOpenChange={wallet.setShowWalletModal}
+        detectedWallets={wallet.detectedWallets}
+        onSelect={(id) => wallet.connect(id)}
+        connecting={wallet.connecting}
+      />
     </div>
   );
 }
