@@ -94,11 +94,21 @@ function detectWallets(): DetectedWallet[] {
     candidates.push(window.trustwallet);
   }
 
-  // Check each candidate provider for wallet-specific flags
+  // Check each candidate provider for wallet-specific flags.
+  // Important: Coinbase Wallet sets overrideIsMetaMask=true, so
+  // window.ethereum.isMetaMask can be true even when it's Coinbase.
+  // We must exclude providers that identify as other wallets.
   for (const provider of candidates) {
     if (!provider) continue;
 
-    if (provider.isMetaMask && !detected.metamask) {
+    // MetaMask: must have isMetaMask AND must NOT be Coinbase/Phantom/etc.
+    if (
+      provider.isMetaMask &&
+      !provider.isCoinbaseWallet &&
+      !provider.isPhantom &&
+      !provider.isRabby &&
+      !detected.metamask
+    ) {
       detected.metamask = { id: "metamask", name: "MetaMask", provider, installed: true };
     }
     if (provider.isCoinbaseWallet && !detected.coinbase) {
@@ -150,52 +160,61 @@ function getWalletProvider(walletId: WalletId): Eip1193Provider | null {
 
   switch (walletId) {
     case "metamask":
-      // MetaMask is usually window.ethereum with isMetaMask
-      if (window.ethereum?.isMetaMask) return window.ethereum;
+      // MetaMask: check providers[] first (most reliable), then window.ethereum.
+      // Must exclude Coinbase (it sets overrideIsMetaMask=true).
       if (window.ethereum?.providers) {
-        const mm = window.ethereum.providers.find((p) => p.isMetaMask);
+        const mm = window.ethereum.providers.find(
+          (p) => p.isMetaMask && !p.isCoinbaseWallet && !p.isPhantom,
+        );
         if (mm) return mm;
       }
-      return window.ethereum ?? null;
+      if (window.ethereum?.isMetaMask && !window.ethereum.isCoinbaseWallet && !window.ethereum.isPhantom) {
+        return window.ethereum;
+      }
+      return null;
 
     case "coinbase":
       if (window.coinbaseWalletExtension) return window.coinbaseWalletExtension;
-      if (window.ethereum?.isCoinbaseWallet) return window.ethereum;
       if (window.ethereum?.providers) {
         const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
         if (cb) return cb;
       }
+      if (window.ethereum?.isCoinbaseWallet) return window.ethereum;
       return null;
 
     case "phantom":
       if (window.phantom?.ethereum) return window.phantom.ethereum;
+      if (window.ethereum?.providers) {
+        const ph = window.ethereum.providers.find((p) => p.isPhantom);
+        if (ph) return ph;
+      }
       if (window.ethereum?.isPhantom) return window.ethereum;
       return null;
 
     case "rabby":
-      if (window.ethereum?.isRabby) return window.ethereum;
       if (window.ethereum?.providers) {
         const rb = window.ethereum.providers.find((p) => p.isRabby);
         if (rb) return rb;
       }
+      if (window.ethereum?.isRabby) return window.ethereum;
       return null;
 
     case "okx":
       if (window.okxwallet) return window.okxwallet;
-      if (window.ethereum?.isOkxWallet) return window.ethereum;
       if (window.ethereum?.providers) {
         const ok = window.ethereum.providers.find((p) => p.isOkxWallet);
         if (ok) return ok;
       }
+      if (window.ethereum?.isOkxWallet) return window.ethereum;
       return null;
 
     case "trust":
       if (window.trustwallet) return window.trustwallet;
-      if (window.ethereum?.isTrust) return window.ethereum;
       if (window.ethereum?.providers) {
         const tw = window.ethereum.providers.find((p) => p.isTrust);
         if (tw) return tw;
       }
+      if (window.ethereum?.isTrust) return window.ethereum;
       return null;
 
     default:
