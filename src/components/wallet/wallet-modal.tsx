@@ -27,8 +27,7 @@ const ALL_WALLET_IDS: WalletId[] = [
   "metamask",
   "coinbase",
   "rabby",
-  "okx",
-  "trust",
+  "rainbow",
   "phantom",
 ];
 
@@ -37,8 +36,7 @@ const WALLET_DOWNLOAD_URLS: Record<string, string> = {
   metamask: "https://metamask.io/download/",
   coinbase: "https://www.coinbase.com/wallet/downloads",
   rabby: "https://rabby.io/",
-  okx: "https://www.okx.com/web3",
-  trust: "https://trustwallet.com/download",
+  rainbow: "https://rainbow.me/download",
   phantom: "https://phantom.com/download",
 };
 

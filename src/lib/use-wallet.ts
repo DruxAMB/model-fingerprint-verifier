@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MetaMask, CoinbaseWallet, Rabby, OKXWallet, TrustWallet, PhantomWallet } from "react-web3-icons";
+import { MetaMask, CoinbaseWallet, Rabby, RainbowWallet, PhantomWallet } from "react-web3-icons";
 
 // Minimal EIP-1193 provider type
 type Eip1193Provider = {
@@ -11,8 +11,6 @@ type Eip1193Provider = {
   isMetaMask?: boolean;
   isCoinbaseWallet?: boolean;
   isRabby?: boolean;
-  isOkxWallet?: boolean;
-  isTrust?: boolean;
   isBraveWallet?: boolean;
   isPhantom?: boolean;
   isRainbow?: boolean;
@@ -36,12 +34,10 @@ declare global {
     ethereum?: Eip1193Provider;
     phantom?: { ethereum?: Eip1193Provider };
     coinbaseWalletExtension?: Eip1193Provider;
-    okxwallet?: Eip1193Provider;
-    trustwallet?: Eip1193Provider;
   }
 }
 
-export type WalletId = "metamask" | "coinbase" | "rabby" | "okx" | "trust" | "phantom" | "browser";
+export type WalletId = "metamask" | "coinbase" | "rabby" | "rainbow" | "phantom" | "browser";
 
 export type DetectedWallet = {
   id: WalletId;
@@ -58,8 +54,7 @@ export const WALLET_META: Record<
   metamask: { name: "MetaMask", Logo: MetaMask },
   coinbase: { name: "Coinbase Wallet", Logo: CoinbaseWallet },
   rabby: { name: "Rabby Wallet", Logo: Rabby },
-  okx: { name: "OKX Wallet", Logo: OKXWallet },
-  trust: { name: "Trust Wallet", Logo: TrustWallet },
+  rainbow: { name: "Rainbow", Logo: RainbowWallet },
   phantom: { name: "Phantom", Logo: PhantomWallet },
   browser: { name: "Browser Wallet", Logo: MetaMask },
 };
@@ -77,8 +72,7 @@ function identifyProvider(
     if (rdns === "io.metamask" || rdns === "io.metamask.mobile") return "metamask";
     if (rdns === "com.coinbase.wallet") return "coinbase";
     if (rdns === "app.rabby") return "rabby";
-    if (rdns === "com.okex.wallet") return "okx";
-    if (rdns === "com.trustwallet.app") return "trust";
+    if (rdns === "me.rainbow") return "rainbow";
     if (rdns === "app.phantom") return "phantom";
   }
 
@@ -88,8 +82,7 @@ function identifyProvider(
     if (name === "metamask") return "metamask";
     if (name === "coinbase wallet" || name === "coinbase") return "coinbase";
     if (name === "rabby") return "rabby";
-    if (name === "okx wallet" || name === "okx") return "okx";
-    if (name === "trust wallet" || name === "trust") return "trust";
+    if (name === "rainbow") return "rainbow";
     if (name === "phantom") return "phantom";
   }
 
@@ -108,8 +101,7 @@ function identifyProvider(
   }
   if (provider.isCoinbaseWallet) return "coinbase";
   if (provider.isRabby) return "rabby";
-  if (provider.isOkxWallet) return "okx";
-  if (provider.isTrust) return "trust";
+  if (provider.isRainbow) return "rainbow";
   if (provider.isPhantom) return "phantom";
 
   return null;
@@ -203,26 +195,6 @@ async function detectWalletsAsync(): Promise<DetectedWallet[]> {
       id: "coinbase",
       name: "Coinbase Wallet",
       provider: window.coinbaseWalletExtension,
-      installed: true,
-    };
-  }
-
-  // 5. Legacy fallback: OKX injects at window.okxwallet
-  if (!detected.okx && window.okxwallet) {
-    detected.okx = {
-      id: "okx",
-      name: "OKX Wallet",
-      provider: window.okxwallet,
-      installed: true,
-    };
-  }
-
-  // 6. Legacy fallback: Trust injects at window.trustwallet
-  if (!detected.trust && window.trustwallet) {
-    detected.trust = {
-      id: "trust",
-      name: "Trust Wallet",
-      provider: window.trustwallet,
       installed: true,
     };
   }
