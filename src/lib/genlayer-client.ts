@@ -129,42 +129,74 @@ function getWriteClient(address: string) {
   });
 }
 
-// Switch the user's MetaMask to the Studionet network.
-// This adds the network if it's not already present.
+// Switch the user's wallet to the Studionet network.
+// Different wallets support different methods:
+// - wallet_addEthereumChain: adds the chain AND switches to it (most wallets)
+// - wallet_switchEthereumChain: switches to an already-added chain (not all wallets support this)
+// We try addEthereumChain first (most compatible), then switch as fallback.
 export async function switchToStudionet(): Promise<void> {
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("No wallet found. Install MetaMask to continue.");
   }
 
+  const chainId = "0xF22F"; // 61999 in hex
+  const chainParams = {
+    chainId,
+    chainName: "GenLayer Studionet",
+    nativeCurrency: {
+      name: "GEN",
+      symbol: "GEN",
+      decimals: 18,
+    },
+    rpcUrls: ["https://studio.genlayer.com/api"],
+    blockExplorerUrls: ["https://studio.genlayer.com"],
+  };
+
+  // Check if already on the correct chain
   try {
-    // Try switching first
+    const currentChainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (currentChainId === chainId) {
+      return; // Already on Studionet
+    }
+  } catch {
+    // If we can't check, proceed with the switch attempt
+  }
+
+  // Try wallet_addEthereumChain first — this both adds and switches
+  // in most wallets (MetaMask, Rainbow, Coinbase, etc.)
+  try {
+    await window.ethereum.request({
+      method: "wallet_addEthereumChain",
+      params: [chainParams],
+    });
+    return;
+  } catch {
+    // If addEthereumChain fails (e.g. chain already exists but wallet
+    // didn't switch), try wallet_switchEthereumChain as fallback
+  }
+
+  try {
     await window.ethereum.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0xF22F" }], // 61999 in hex
+      params: [{ chainId }],
     });
   } catch (switchError: unknown) {
-    // If the chain hasn't been added, add it
-    const err = switchError as { code?: number };
-    if (err.code === 4902) {
-      await window.ethereum.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: "0xF22F",
-            chainName: "GenLayer Studionet",
-            nativeCurrency: {
-              name: "GEN",
-              symbol: "GEN",
-              decimals: 18,
-            },
-            rpcUrls: ["https://studio.genlayer.com/api"],
-            blockExplorerUrls: ["https://studio.genlayer.com"],
-          },
-        ],
-      });
-    } else {
-      throw switchError;
+    // If both methods fail, check if we're somehow already on the right chain
+    try {
+      const currentChainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (currentChainId === chainId) {
+        return;
+      }
+    } catch {
+      // ignore
     }
+    const err = switchError as { code?: number; message?: string };
+    if (err.code === 4902) {
+      throw new Error("Studionet network could not be added to your wallet. Please add it manually: Chain ID 61999, RPC: https://studio.genlayer.com/api");
+    }
+    throw new Error(
+      `Could not switch to Studionet network. ${err.message || "Please switch your wallet to GenLayer Studionet (Chain ID 61999) manually."}`,
+    );
   }
 }
 
