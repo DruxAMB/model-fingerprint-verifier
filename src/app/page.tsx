@@ -7,6 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -45,6 +53,20 @@ import {
 import { useWallet } from "@/lib/use-wallet";
 import { WalletModal } from "@/components/wallet/wallet-modal";
 import { MOCK_RESPONSES } from "@/lib/mock-data";
+
+const KNOWN_MODELS = [
+  "GPT-5",
+  "Claude Opus 4.5",
+  "Claude Sonnet 4.5",
+  "Gemini 3 Pro",
+  "Gemini 3.6 Flash",
+  "Llama 4 Maverick",
+  "Qwen3 Max",
+  "DeepSeek V3.2",
+  "Grok 4",
+];
+
+const CUSTOM_MODEL = "__custom__";
 
 const STATUS_CONFIG: Record<
   AgentStatus,
@@ -199,6 +221,7 @@ export default function Home() {
   const [verifying, setVerifying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modelPreset, setModelPreset] = useState("");
   const [claimedModel, setClaimedModel] = useState("");
   const [description, setDescription] = useState("");
 
@@ -250,6 +273,7 @@ export default function Home() {
       toast.success("Agent registered on-chain", {
         description: `Claiming to be "${claimedModel.trim()}" — tx: ${result.txHash.slice(0, 10)}...`,
       });
+      setModelPreset("");
       setClaimedModel("");
       setDescription("");
       setShowRegister(false);
@@ -477,7 +501,17 @@ export default function Home() {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
               <span className="sr-only">Refresh</span>
             </Button>
-            <Dialog open={showRegister} onOpenChange={setShowRegister}>
+            <Dialog
+              open={showRegister}
+              onOpenChange={(open) => {
+                setShowRegister(open);
+                if (!open) {
+                  setModelPreset("");
+                  setClaimedModel("");
+                  setDescription("");
+                }
+              }}
+            >
               <Button
                 variant="outline"
                 size="sm"
@@ -500,15 +534,39 @@ export default function Home() {
                 <form onSubmit={handleRegister} className="space-y-4 pt-2">
                   <div className="space-y-2">
                     <Label htmlFor="claimed-model">Claimed Model</Label>
-                    <Input
-                      id="claimed-model"
-                      placeholder="e.g., GPT-5, Claude 3.5 Sonnet, Gemini 3.6 Flash"
-                      value={claimedModel}
-                      onChange={(e) => setClaimedModel(e.target.value)}
-                      required
-                      maxLength={200}
+                    <Select
+                      value={modelPreset || null}
+                      onValueChange={(value) => {
+                        if (value === null) return;
+                        setModelPreset(value);
+                        setClaimedModel(value === CUSTOM_MODEL ? "" : value);
+                      }}
                       disabled={registering}
-                    />
+                    >
+                      <SelectTrigger id="claimed-model" aria-label="Claimed Model">
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {KNOWN_MODELS.map((model) => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))}
+                        <SelectSeparator />
+                        <SelectItem value={CUSTOM_MODEL}>Other (custom)…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {modelPreset === CUSTOM_MODEL && (
+                      <Input
+                        placeholder="e.g., Mistral Large 3"
+                        value={claimedModel}
+                        onChange={(e) => setClaimedModel(e.target.value)}
+                        required
+                        maxLength={200}
+                        disabled={registering}
+                        autoFocus
+                      />
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="description">Agent Description</Label>
