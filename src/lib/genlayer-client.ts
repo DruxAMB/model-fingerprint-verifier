@@ -129,74 +129,48 @@ function getWriteClient(address: string) {
   });
 }
 
-// Switch the user's wallet to the Studionet network.
-// Different wallets support different methods:
-// - wallet_addEthereumChain: adds the chain AND switches to it (most wallets)
-// - wallet_switchEthereumChain: switches to an already-added chain (not all wallets support this)
-// We try addEthereumChain first (most compatible), then switch as fallback.
-export async function switchToStudionet(): Promise<void> {
-  if (typeof window === "undefined" || !window.ethereum) {
-    throw new Error("No wallet found. Install MetaMask to continue.");
-  }
+// Best-effort switch to Studionet. Some wallets (Rainbow) don't support
+// wallet_switchEthereumChain. If switching fails, we try the transaction
+// anyway — the GenLayer SDK sends to its own RPC endpoint, not the
+// wallet's chain RPC, so the wallet's chain may not matter.
+async function trySwitchToStudionet(): Promise<void> {
+  if (typeof window === "undefined" || !window.ethereum) return;
 
   const chainId = "0xF22F"; // 61999 in hex
   const chainParams = {
     chainId,
     chainName: "GenLayer Studionet",
-    nativeCurrency: {
-      name: "GEN",
-      symbol: "GEN",
-      decimals: 18,
-    },
+    nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
     rpcUrls: ["https://studio.genlayer.com/api"],
     blockExplorerUrls: ["https://studio.genlayer.com"],
   };
 
-  // Check if already on the correct chain
+  // Already on Studionet?
   try {
-    const currentChainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (currentChainId === chainId) {
-      return; // Already on Studionet
-    }
-  } catch {
-    // If we can't check, proceed with the switch attempt
-  }
+    const current = await window.ethereum.request({ method: "eth_chainId" });
+    if (current === chainId) return;
+  } catch { /* proceed */ }
 
-  // Try wallet_addEthereumChain first — this both adds and switches
-  // in most wallets (MetaMask, Rainbow, Coinbase, etc.)
+  // Try addEthereumChain (adds + switches in most wallets)
   try {
     await window.ethereum.request({
       method: "wallet_addEthereumChain",
       params: [chainParams],
     });
     return;
-  } catch {
-    // If addEthereumChain fails (e.g. chain already exists but wallet
-    // didn't switch), try wallet_switchEthereumChain as fallback
-  }
+  } catch { /* fall through */ }
 
+  // Try switchEthereumChain (not all wallets support this)
   try {
     await window.ethereum.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId }],
     });
-  } catch (switchError: unknown) {
-    // If both methods fail, check if we're somehow already on the right chain
-    try {
-      const currentChainId = await window.ethereum.request({ method: "eth_chainId" });
-      if (currentChainId === chainId) {
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    const err = switchError as { code?: number; message?: string };
-    if (err.code === 4902) {
-      throw new Error("Studionet network could not be added to your wallet. Please add it manually: Chain ID 61999, RPC: https://studio.genlayer.com/api");
-    }
-    throw new Error(
-      `Could not switch to Studionet network. ${err.message || "Please switch your wallet to GenLayer Studionet (Chain ID 61999) manually."}`,
-    );
+  } catch {
+    // Both methods failed — don't throw. Let the transaction attempt
+    // proceed. If the SDK rejects it for chain mismatch, the error
+    // message will tell the user to switch manually.
+    console.warn("Could not auto-switch to Studionet. If the transaction fails, manually switch your wallet to GenLayer Studionet (Chain ID 61999).");
   }
 }
 
@@ -217,14 +191,19 @@ export async function registerAgent(
   claimedModel: string,
   description: string,
 ): Promise<{ txHash: string }> {
-  await switchToStudionet();
+  await trySwitchToStudionet();
   const writeClient = getWriteClient(address);
-  const txHash = (await writeClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "register_agent",
-    args: [claimedModel, description],
-    value: BigInt(0),
-  })) as string;
+  let txHash: string;
+  try {
+    txHash = (await writeClient.writeContract({
+      address: CONTRACT_ADDRESS,
+      functionName: "register_agent",
+      args: [claimedModel, description],
+      value: BigInt(0),
+    })) as string;
+  } catch (err) {
+    throw enrichChainError(err, "register");
+  }
 
   const receipt = await readClient.waitForTransactionReceipt({
     hash: txHash as never,
@@ -239,14 +218,19 @@ export async function submitResponses(
   address: string,
   responses: string[],
 ): Promise<{ txHash: string }> {
-  await switchToStudionet();
+  await trySwitchToStudionet();
   const writeClient = getWriteClient(address);
-  const txHash = (await writeClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "submit_responses",
-    args: [responses],
-    value: BigInt(0),
-  })) as string;
+  let txHash: string;
+  try {
+    txHash = (await writeClient.writeContract({
+      address: CONTRACT_ADDRESS,
+      functionName: "submit_responses",
+      args: [responses],
+      value: BigInt(0),
+    })) as string;
+  } catch (err) {
+    throw enrichChainError(err, "submit responses");
+  }
 
   const receipt = await readClient.waitForTransactionReceipt({
     hash: txHash as never,
@@ -260,14 +244,19 @@ export async function submitResponses(
 export async function runVerification(
   address: string,
 ): Promise<{ txHash: string }> {
-  await switchToStudionet();
+  await trySwitchToStudionet();
   const writeClient = getWriteClient(address);
-  const txHash = (await writeClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "run_verification",
-    args: [],
-    value: BigInt(0),
-  })) as string;
+  let txHash: string;
+  try {
+    txHash = (await writeClient.writeContract({
+      address: CONTRACT_ADDRESS,
+      functionName: "run_verification",
+      args: [],
+      value: BigInt(0),
+    })) as string;
+  } catch (err) {
+    throw enrichChainError(err, "run verification");
+  }
 
   // Verification takes longer because it runs LLM consensus
   const receipt = await readClient.waitForTransactionReceipt({
@@ -277,4 +266,16 @@ export async function runVerification(
 
   checkReceipt(receipt, "Verification");
   return { txHash };
+}
+
+// If the SDK throws a chain mismatch error, add a helpful message
+// telling the user to switch to Studionet manually.
+function enrichChainError(err: unknown, action: string): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("chain") || msg.includes("Chain") || msg.includes("network")) {
+    return new Error(
+      `Could not ${action}: your wallet is on the wrong network. Please manually switch to GenLayer Studionet (Chain ID 61999) in your wallet and try again.`,
+    );
+  }
+  return err instanceof Error ? err : new Error(`Could not ${action}: ${msg}`);
 }
