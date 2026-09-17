@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -155,7 +156,9 @@ function ChallengeResponse({
       {response ? (
         <div className="rounded-lg border p-3">
           <p className="text-xs text-muted-foreground mb-1">Agent response:</p>
-          <pre className="text-sm whitespace-pre-wrap font-sans">{response}</pre>
+          <div className="text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-2 [&_strong]:font-medium [&_strong]:text-foreground [&_em]:italic [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_li]:marker:text-muted-foreground [&_code]:rounded-md [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:font-heading [&_h1]:text-base [&_h1]:font-medium [&_h1]:mt-3 [&_h1]:mb-1 [&_h2]:font-heading [&_h2]:text-base [&_h2]:font-medium [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-heading [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3 [&_h3]:mb-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+            <ReactMarkdown>{response}</ReactMarkdown>
+          </div>
         </div>
       ) : (
         <div className="rounded-lg border border-dashed p-3">
