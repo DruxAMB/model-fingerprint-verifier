@@ -54,7 +54,7 @@
   --shadow-modal: var(--shadow-modal-value);
 }
 
-/* AuthKit — "frosted glass cathedral at midnight", adapted.
+/* AuthKit - "frosted glass cathedral at midnight", adapted.
    Source: https://styles.refero.design/style/e80231a2-e4d6-406a-a2c9-2e6109679690
    Dark-only system: values live in :root, color-scheme forced dark. */
 :root {
@@ -108,7 +108,7 @@
   --sidebar-ring: rgba(186, 215, 247, 0.35);
 }
 
-/* Skywash — headline gradient, display wordmark + largest headings only */
+/* Skywash - headline gradient, display wordmark + largest headings only */
 @utility text-skywash {
   background-image: linear-gradient(180deg, var(--ice-highlight) 0%, var(--skywash-end) 100%);
   -webkit-background-clip: text;
@@ -116,7 +116,7 @@
   color: transparent;
 }
 
-/* Blueprint grid — full-bleed ambient layer, masked to fade at edges */
+/* Blueprint grid - full-bleed ambient layer, masked to fade at edges */
 @utility bg-blueprint {
   background-image:
     linear-gradient(rgba(186, 215, 247, 0.06) 1px, transparent 1px),
@@ -126,7 +126,7 @@
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
 }
 
-/* Conic spotlight halo — anchors the top of a full-bleed hero */
+/* Conic spotlight halo - anchors the top of a full-bleed hero */
 @utility hero-spotlight {
   background-image: conic-gradient(
     at 50% -5%,
@@ -149,7 +149,7 @@
     @apply font-sans;
   }
 
-  /* Frosted scrollbar — thin translucent thumb, transparent track */
+  /* Frosted scrollbar - thin translucent thumb, transparent track */
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(186, 215, 247, 0.22) transparent;

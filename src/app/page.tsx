@@ -274,7 +274,7 @@ export default function Home() {
         description.trim(),
       );
       toast.success("Agent registered on-chain", {
-        description: `Claiming to be "${claimedModel.trim()}" — tx: ${result.txHash.slice(0, 10)}...`,
+        description: `Claiming to be "${claimedModel.trim()}" · tx: ${result.txHash.slice(0, 10)}...`,
       });
       setModelPreset("");
       setClaimedModel("");
@@ -613,7 +613,7 @@ export default function Home() {
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
                     MetaMask will prompt you to sign the transaction.
-                    Studionet is gasless — no funds needed.
+                    Studionet is gasless, no funds needed.
                   </p>
                 </form>
               </DialogContent>
@@ -723,7 +723,7 @@ export default function Home() {
 
                 <Separator />
 
-                {/* Actions — only for the connected user's own agent */}
+                {/* Actions - only for the connected user's own agent */}
                 {selectedAgent.address === wallet.address ? (
                   <div className="flex flex-col gap-2 sm:flex-row">
                     {selectedAgent.responses.length === 0 && selectedAgent.status === "pending" && (

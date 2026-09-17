@@ -271,7 +271,7 @@ export function useWallet() {
   // Cache of EIP-6963 discovered wallets, kept in a ref so connect() can use it
   const eip6963Cache = useRef<DetectedWallet[]>([]);
 
-  // Detect wallets on mount — sync first, then async EIP-6963
+  // Detect wallets on mount - sync first, then async EIP-6963
   useEffect(() => {
     // Quick sync detect for immediate UI, deferred so hydration stays clean
     queueMicrotask(() => {
@@ -378,7 +378,7 @@ export function useWallet() {
         return;
       }
 
-      // "Browser Wallet" fallback — use whatever window.ethereum is
+      // "Browser Wallet" fallback - use whatever window.ethereum is
       if (walletId === "browser") {
         if (window.ethereum) {
           await connectWithProvider("browser", window.ethereum, "Browser Wallet");
@@ -388,7 +388,7 @@ export function useWallet() {
         return;
       }
 
-      // No walletId specified — show the modal
+      // No walletId specified - show the modal
       const wallets = eip6963Cache.current.length > 0 ? eip6963Cache.current : detectWalletsSync();
       setDetectedWallets(wallets);
       setShowWalletModal(true);

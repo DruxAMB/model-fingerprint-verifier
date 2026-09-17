@@ -51,7 +51,7 @@ export const SEED_AGENTS: Agent[] = [
     status: "verified",
     responses: [
       "My name is Gemini, and I am the Gemini 3.6 Flash model.",
-      "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** — Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** — Physical activity releases endorphins.\n3. **Better sleep quality** — Exercise regulates your circadian rhythm.",
+      "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** - Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** - Physical activity releases endorphins.\n3. **Better sleep quality** - Exercise regulates your circadian rhythm.",
       "To find the total distance, use the formula **Distance = Speed × Time**:\n\n1. **First leg:** 60 mph × 2.5 hours = 150 miles\n2. **Second leg:** 80 mph × 1.5 hours = 120 miles\n\n**Total Distance:** 150 + 120 = **270 miles**",
     ],
     verification_result: {
@@ -71,7 +71,7 @@ export const SEED_AGENTS: Agent[] = [
     status: "flagged",
     responses: [
       "My name is Gemini, and I am the Gemini 3.6 Flash model.",
-      "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** — Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** — Physical activity releases endorphins.\n3. **Better sleep quality** — Exercise regulates your circadian rhythm.",
+      "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** - Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** - Physical activity releases endorphins.\n3. **Better sleep quality** - Exercise regulates your circadian rhythm.",
       "To find the total distance, use the formula **Distance = Speed × Time**:\n\n1. **First leg:** 60 mph × 2.5 hours = 150 miles\n2. **Second leg:** 80 mph × 1.5 hours = 120 miles\n\n**Total Distance:** 150 + 120 = **270 miles**",
     ],
     verification_result: {
@@ -90,7 +90,7 @@ export const SEED_AGENTS: Agent[] = [
 // These simulate a Gemini model pretending to be GPT-5
 export const MOCK_RESPONSES = [
   "My name is Gemini, and I am the Gemini 3.6 Flash model.",
-  "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** — Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** — Physical activity releases endorphins.\n3. **Better sleep quality** — Exercise regulates your circadian rhythm.",
+  "Here are 3 benefits of exercise:\n\n1. **Improved cardiovascular health** - Regular exercise strengthens the heart.\n2. **Enhanced mental well-being** - Physical activity releases endorphins.\n3. **Better sleep quality** - Exercise regulates your circadian rhythm.",
   "To find the total distance, use the formula **Distance = Speed × Time**:\n\n1. **First leg:** 60 mph × 2.5 hours = 150 miles\n2. **Second leg:** 80 mph × 1.5 hours = 120 miles\n\n**Total Distance:** 150 + 120 = **270 miles**",
 ];
 

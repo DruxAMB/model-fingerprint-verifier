@@ -1,4 +1,4 @@
-// GenLayer client integration — reads are always available, writes
+// GenLayer client integration - reads are always available, writes
 // require a connected MetaMask wallet. No private keys are stored or
 // transmitted; the user signs all transactions through their wallet.
 
@@ -9,7 +9,7 @@ import { TransactionStatus, ExecutionResult } from "genlayer-js/types";
 // Contract address on Studionet (deployed 2026-09-10)
 export const CONTRACT_ADDRESS = "0xCF6B87C16fE73F2087B07b6B0aF06BCB4B16e344";
 
-// Read client — no wallet needed, safe for browser
+// Read client - no wallet needed, safe for browser
 const readClient = createClient({
   chain: studionet,
 });
@@ -117,7 +117,7 @@ export async function getAgentCount(): Promise<number> {
 // --- Writes (require connected MetaMask wallet) ---
 
 // Create a write client using the user's wallet. The wallet must be
-// switched to Studionet before writing — call switchToStudionet first.
+// switched to Studionet before writing - call switchToStudionet first.
 function getWriteClient(address: string) {
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("No wallet found. Install MetaMask to continue.");
@@ -131,7 +131,7 @@ function getWriteClient(address: string) {
 
 // Best-effort switch to Studionet. Some wallets (Rainbow) don't support
 // wallet_switchEthereumChain. If switching fails, we try the transaction
-// anyway — the GenLayer SDK sends to its own RPC endpoint, not the
+// anyway - the GenLayer SDK sends to its own RPC endpoint, not the
 // wallet's chain RPC, so the wallet's chain may not matter.
 async function trySwitchToStudionet(): Promise<void> {
   if (typeof window === "undefined" || !window.ethereum) return;
@@ -167,7 +167,7 @@ async function trySwitchToStudionet(): Promise<void> {
       params: [{ chainId }],
     });
   } catch {
-    // Both methods failed — don't throw. Let the transaction attempt
+    // Both methods failed - don't throw. Let the transaction attempt
     // proceed. If the SDK rejects it for chain mismatch, the error
     // message will tell the user to switch manually.
     console.warn("Could not auto-switch to Studionet. If the transaction fails, manually switch your wallet to GenLayer Studionet (Chain ID 61999).");
@@ -175,7 +175,7 @@ async function trySwitchToStudionet(): Promise<void> {
 }
 
 // Check receipt for errors. txExecutionResultName may be undefined for
-// write transactions that don't return a value — that's OK. We only
+// write transactions that don't return a value - that's OK. We only
 // fail on explicit FINISHED_WITH_ERROR.
 function checkReceipt(
   receipt: { txExecutionResultName?: ExecutionResult },

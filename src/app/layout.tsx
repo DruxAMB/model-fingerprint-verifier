@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Model Fingerprint Verifier — On-chain AI identity verification",
+  title: "Model Fingerprint Verifier | On-chain AI identity verification",
   description:
     "Verify what LLM an AI agent actually runs. GenLayer consensus catches agents lying about their model.",
 };
