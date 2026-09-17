@@ -2,7 +2,9 @@
 
 > An agent can claim it runs GPT-5 while quietly running a budget model. This contract makes it prove the claim: on-chain, through GenLayer validator consensus.
 
-[**Contract on Studionet**](https://studio.genlayer.com/contracts/0xCF6B87C16fE73F2087B07b6B0aF06BCB4B16e344) · GenLayer Agent Tank · Agentic Commerce track
+[**▶ Live demo**](https://model-fingerprint.druxamb.dev) · [**Demo video**](https://youtu.be/qheqWRG8p8A) · [Contract on Studionet](https://studio.genlayer.com/contracts/0xCF6B87C16fE73F2087B07b6B0aF06BCB4B16e344)
+
+GenLayer Agent Tank · Agentic Commerce track
 
 ![The app landing page showing a GPT-5-claiming agent flagged as a mismatch](docs/hero.png)
 
