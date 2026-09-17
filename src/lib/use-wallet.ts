@@ -273,10 +273,12 @@ export function useWallet() {
 
   // Detect wallets on mount — sync first, then async EIP-6963
   useEffect(() => {
-    // Quick sync detect for immediate UI
-    const syncWallets = detectWalletsSync();
-    setDetectedWallets(syncWallets);
-    setHasWallet(syncWallets.length > 0 || !!window.ethereum);
+    // Quick sync detect for immediate UI, deferred so hydration stays clean
+    queueMicrotask(() => {
+      const syncWallets = detectWalletsSync();
+      setDetectedWallets(syncWallets);
+      setHasWallet(syncWallets.length > 0 || !!window.ethereum);
+    });
 
     // Async EIP-6963 discover for shadowed wallets (e.g. MetaMask behind Rainbow)
     detectWalletsAsync().then((asyncWallets) => {

@@ -31,15 +31,6 @@ const ALL_WALLET_IDS: WalletId[] = [
   "phantom",
 ];
 
-// Download links for non-installed wallets
-const WALLET_DOWNLOAD_URLS: Record<string, string> = {
-  metamask: "https://metamask.io/download/",
-  coinbase: "https://www.coinbase.com/wallet/downloads",
-  rabby: "https://rabby.io/",
-  rainbow: "https://rainbow.me/download",
-  phantom: "https://phantom.com/download",
-};
-
 export function WalletModal({
   open,
   onOpenChange,
@@ -80,7 +71,7 @@ export function WalletModal({
                 key={id}
                 onClick={() => onSelect(id)}
                 disabled={connecting}
-                className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-full border p-3 pl-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Logo className="h-8 w-8 shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -110,7 +101,7 @@ export function WalletModal({
           <button
             onClick={() => onSelect("browser")}
             disabled={connecting}
-            className="flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center gap-3 rounded-full border border-dashed p-3 pl-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
               <Wallet className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -127,7 +118,7 @@ export function WalletModal({
           </button>
 
           <p className="pt-2 text-center text-xs text-muted-foreground">
-            Don't have a wallet?{" "}
+            Don&apos;t have a wallet?{" "}
             <a
               href="https://metamask.io/download/"
               target="_blank"

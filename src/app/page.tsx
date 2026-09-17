@@ -73,9 +73,9 @@ const STATUS_CONFIG: Record<
   { label: string; icon: typeof ShieldCheck; className: string }
 > = {
   pending: { label: "Pending", icon: Brain, className: "bg-muted text-muted-foreground" },
-  verified: { label: "Verified", icon: ShieldCheck, className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  flagged: { label: "Flagged", icon: ShieldX, className: "bg-red-500/10 text-red-600 dark:text-red-400" },
-  inconclusive: { label: "Inconclusive", icon: ShieldAlert, className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  verified: { label: "Verified", icon: ShieldCheck, className: "bg-success/10 text-success" },
+  flagged: { label: "Flagged", icon: ShieldX, className: "bg-destructive/10 text-destructive" },
+  inconclusive: { label: "Inconclusive", icon: ShieldAlert, className: "bg-warning/10 text-warning" },
 };
 
 function StatusBadge({ status }: { status: AgentStatus }) {
@@ -115,11 +115,11 @@ function AgentCard({ agent, onClick }: { agent: Agent; onClick: () => void }) {
         {agent.verification_result && (
           <div className="mt-2 flex items-center gap-2 text-xs">
             {agent.verification_result.verdict === "match" ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden="true" />
             ) : agent.verification_result.verdict === "mismatch" ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-red-500" aria-hidden="true" />
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
             ) : (
-              <ShieldAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              <ShieldAlert className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
             )}
             <span className="text-muted-foreground truncate">
               {agent.verification_result.reasoning}
@@ -172,23 +172,23 @@ function VerdictDisplay({ result }: { result: VerificationResult }) {
 
   return (
     <div
-      className={`rounded-lg border p-4 ${
+      className={`rounded-lg border p-6 shadow-glass-card ${
         isMatch
-          ? "border-emerald-500/30 bg-emerald-500/5"
+          ? "border-success/30 bg-success/5"
           : isMismatch
-            ? "border-red-500/30 bg-red-500/5"
-            : "border-amber-500/30 bg-amber-500/5"
+            ? "border-destructive/30 bg-destructive/5"
+            : "border-warning/30 bg-warning/5"
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
         {isMatch ? (
-          <ShieldCheck className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+          <ShieldCheck className="h-5 w-5 text-success" aria-hidden="true" />
         ) : isMismatch ? (
-          <ShieldX className="h-5 w-5 text-red-500" aria-hidden="true" />
+          <ShieldX className="h-5 w-5 text-destructive" aria-hidden="true" />
         ) : (
-          <ShieldAlert className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          <ShieldAlert className="h-5 w-5 text-warning" aria-hidden="true" />
         )}
-        <span className="font-semibold text-lg">
+        <span className="font-heading font-medium text-lg">
           {isMatch
             ? "VERIFIED"
             : isMismatch
@@ -294,7 +294,7 @@ export default function Home() {
     if (!selectedAgent || !wallet.address) return;
     setSubmitting(true);
     try {
-      const result = await submitResponses(wallet.address, MOCK_RESPONSES);
+      await submitResponses(wallet.address, MOCK_RESPONSES);
       toast.success("Responses submitted on-chain", {
         description: "Simulated Gemini 3.6 Flash responses loaded",
       });
@@ -345,17 +345,19 @@ export default function Home() {
   };
 
   const agentList = Object.values(agents);
-  const connectedAgent = wallet.address ? agents[wallet.address] : null;
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Ambient blueprint grid + hero spotlight */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 bg-blueprint" />
       {/* Hero Section */}
-      <section className="border-b">
-        <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
-          <div className="flex items-center justify-between gap-4 mb-4">
+      <section className="relative border-b">
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[480px] hero-spotlight" />
+        <div className="relative mx-auto max-w-[1200px] px-4 py-16 sm:px-6 sm:py-20">
+          <div className="flex items-center justify-between gap-4 mb-10">
             <div className="flex items-center gap-2">
-              <Fingerprint className="h-6 w-6 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-muted-foreground">
+              <Fingerprint className="h-6 w-6 text-blueprint-blue" aria-hidden="true" />
+              <span className="text-sm font-medium text-moon-mist">
                 GenLayer Intelligent Contract
               </span>
             </div>
@@ -395,20 +397,29 @@ export default function Home() {
               </Button>
             )}
           </div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Model Fingerprint Verifier
-          </h1>
-          <p className="mt-3 text-lg text-muted-foreground max-w-2xl">
-            On-chain identity verification for AI agents. GenLayer consensus
-            catches agents lying about what model they run.
-          </p>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-4">
+              <div className="h-px w-16 bg-gradient-to-r from-transparent to-border" aria-hidden="true" />
+              <span className="font-mono text-[15px] uppercase tracking-[0.1em] text-moon-mist">
+                Agentic identity verification
+              </span>
+              <div className="h-px w-16 bg-gradient-to-l from-transparent to-border" aria-hidden="true" />
+            </div>
+            <h1 className="mt-6 font-heading text-4xl font-medium tracking-tight sm:text-5xl">
+              <span className="text-skywash">Model Fingerprint Verifier</span>
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+              On-chain identity verification for AI agents. GenLayer consensus
+              catches agents lying about what model they run.
+            </p>
+          </div>
           {wallet.error && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            <p className="mt-3 text-center text-sm text-destructive">
               {wallet.error}
             </p>
           )}
           {!wallet.hasWallet && (
-            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+            <p className="mt-3 text-center text-sm text-warning">
               No wallet detected. Install{" "}
               <a
                 href="https://metamask.io/download/"
@@ -421,7 +432,7 @@ export default function Home() {
               to register and verify agents.
             </p>
           )}
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Button
               size="lg"
               onClick={() => {
@@ -452,27 +463,30 @@ export default function Home() {
               </Button>
             )}
           </div>
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border p-4">
-              <p className="text-sm font-medium">1. Register</p>
-              <p className="text-xs text-muted-foreground mt-1">
+          <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-lg bg-card p-6 shadow-glass-card">
+              <p className="font-mono text-xs uppercase tracking-[0.1em] text-moon-mist">Step 01</p>
+              <p className="mt-2 text-sm font-medium">Register</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Agent claims a model identity on-chain
               </p>
             </div>
-            <div className="rounded-lg border p-4">
-              <p className="text-sm font-medium">2. Challenge</p>
-              <p className="text-xs text-muted-foreground mt-1">
+            <div className="rounded-lg bg-card p-6 shadow-glass-card">
+              <p className="font-mono text-xs uppercase tracking-[0.1em] text-moon-mist">Step 02</p>
+              <p className="mt-2 text-sm font-medium">Challenge</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Contract generates calibrated fingerprinting prompts
               </p>
             </div>
-            <div className="rounded-lg border p-4">
-              <p className="text-sm font-medium">3. Verify</p>
-              <p className="text-xs text-muted-foreground mt-1">
+            <div className="rounded-lg bg-card p-6 shadow-glass-card">
+              <p className="font-mono text-xs uppercase tracking-[0.1em] text-moon-mist">Step 03</p>
+              <p className="mt-2 text-sm font-medium">Verify</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 GenLayer validators analyze responses via consensus
               </p>
             </div>
           </div>
-          <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <span className="font-mono">Contract: {CONTRACT_ADDRESS.slice(0, 10)}...{CONTRACT_ADDRESS.slice(-8)}</span>
             <a
               href={`https://studio.genlayer.com/contracts/${CONTRACT_ADDRESS}`}
@@ -610,12 +624,12 @@ export default function Home() {
             <Skeleton className="h-28 w-full" />
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-8 text-center">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-8 text-center">
             <AlertTriangle
-              className="h-8 w-8 mx-auto text-red-500 mb-2"
+              className="h-8 w-8 mx-auto text-destructive mb-2"
               aria-hidden="true"
             />
-            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+            <p className="text-sm font-medium text-destructive">
               Failed to load contract data
             </p>
             <p className="text-xs text-muted-foreground mt-1 mb-4">{error}</p>
